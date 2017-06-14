@@ -31,7 +31,10 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
 	normal_distribution<double> dist_theta(theta, std[2]);
 
 	for (int i = 0; i < num_particles; ++i) {
-        Particle particle{i, dist_x(gen), dist_y(gen), dist_theta(gen), 1}; // TODO: What about the rest of fields?
+        Particle particle{i, dist_x(gen), dist_y(gen), dist_theta(gen), 1};
+        cout << "x:" << x << "\t" << particle.x << endl;
+        cout << "y:" << y << "\t" << particle.y << endl;
+        cout << "theta:" << theta << "\t" << particle.theta << endl;
         particles.push_back(particle);
 	}
 
@@ -47,7 +50,7 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
     normal_distribution<double> dist_x(0, std_pos[0]);
     normal_distribution<double> dist_y(0, std_pos[1]);
     normal_distribution<double> dist_theta(0, std_pos[2]);
-    for (Particle particle: particles) {
+    for (Particle &particle: particles) {
         if (fabs(yaw_rate) > 0.001) {
             particle.x += velocity / yaw_rate * (sin(particle.theta + yaw_rate * delta_t) - sin(particle.theta));
             particle.y += velocity / yaw_rate * (-cos(particle.theta + yaw_rate * delta_t) + cos(particle.theta));
@@ -96,32 +99,39 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
     //   http://planning.cs.uiuc.edu/node99.html
 
     // Identify the landmark each observation is associated with
-    for (Particle particle: particles) {
+    for (Particle &particle: particles) {
         std::vector<double> sense_x_world;
         std::vector<double> sense_y_world;
         std::vector<int> associations;
-        for (LandmarkObs obs: observations) {
+        for (const LandmarkObs &obs: observations) {
             // Transform observation from car coordinate system to map coordinate system
             double x_world = particle.x + obs.x * cos(-particle.theta) + obs.y * sin(-particle.theta);
             double y_world = particle.y + obs.x * sin(particle.theta) + obs.y * cos(particle.theta);
-            sense_x_world.push_back(x_world);
-            sense_y_world.push_back(y_world);
 
             // Find the closest Landmark
             int max_i = 0;
-            double max_dist = 0;
+            double min_dist = sensor_range;
             for (Map::single_landmark_s landmark: map_landmarks.landmark_list) {
                 double distance = dist((double)landmark.x_f, (double)landmark.y_f, x_world, y_world);
-                if (distance < sensor_range && distance > max_dist) {
+                if (distance < min_dist) {
                     max_i = landmark.id_i;
-                    max_dist = distance;
+                    min_dist = distance;
                 }
             }
-            associations.push_back(max_i);
+
+            // Use only observations with landmark associated
+            if (max_i > 0) {
+                double dd = dist(8.7638, 7.5647, x_world, y_world);
+                sense_x_world.push_back(x_world);
+                sense_y_world.push_back(y_world);
+                associations.push_back(max_i);
+            }
         }
-        SetAssociations(particle, associations, sense_x_world, sense_y_world);
+
+        particle = SetAssociations(particle, associations, sense_x_world, sense_y_world);
 
         // Calculate weight
+        particle.weight = 1.;
         for (int i = 0; i < particle.associations.size(); ++i) {
             int landmark_i = particle.associations[i];
             double x_sense = particle.sense_x[i];
@@ -136,7 +146,8 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
                     break;
                 }
             }
-            particle.weight = computeGaussianProbability(x_sense, y_sense, x_landmark, y_landmark, std_landmark[0], std_landmark[1]);
+            double prob = computeGaussianProbability(x_sense, y_sense, x_landmark, y_landmark, std_landmark[0], std_landmark[1]);
+            particle.weight *= prob;
         }
     }
 }
