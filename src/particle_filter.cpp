@@ -111,10 +111,10 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
             int max_i = 0;
             double max_dist = 0;
             for (Map::single_landmark_s landmark: map_landmarks.landmark_list) {
-                double dist = dist(landmark.x_f, landmark.y_f, x_world, y_world);
-                if (dist < sensor_range && dist > max_dist) {
+                double distance = dist((double)landmark.x_f, (double)landmark.y_f, x_world, y_world);
+                if (distance < sensor_range && distance > max_dist) {
                     max_i = landmark.id_i;
-                    max_dist = dist;
+                    max_dist = distance;
                 }
             }
             associations.push_back(max_i);
